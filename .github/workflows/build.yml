@@ -1,0 +1,32 @@
+name: Build Kernel
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  
+
+    steps:
+    - name: Baixar o Código
+      uses: actions/checkout@v4
+
+    - name: Instalar Ferramentas (NASM e Compiladores)
+      run: |
+        sudo apt update
+        sudo apt install -y nasm build-essential gcc-multilib g++-multilib
+
+    - name: Compilar o Kernel
+      run: |
+        nasm -f elf32 boot.asm -o boot.o
+        g++ -m32 -c kernel.cpp -o kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+        ld -m elf_i386 -T linker.ld boot.o kernel.o -o myos.bin
+
+    - name: Salvar o Arquivo Binario (Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: myos-kernel
+        path: myos.bin
