@@ -1,277 +1,146 @@
-// ---------------------------------------------------------------------------
-// Tipos Básicos para Desenvolvimento Freestanding (sem stdint.h)
-// ---------------------------------------------------------------------------
 typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
 typedef unsigned long long uint64_t;
 typedef uint32_t           uintptr_t;
 
-// ---------------------------------------------------------------------------
-// Funções Úteis de Porta I/O (Assembly embutido)
-// ---------------------------------------------------------------------------
-inline uint8_t inb(uint16_t port) {
-    uint8_t result;
-    asm volatile ("inb %1, %0" : "=a"(result) : "Nd"(port));
-    return result;
+// --- COMUNICAÇÃO DE HARDWARE (PORTAS I/O) ---
+extern "C" {
+    void load_idt(void* idt_ptr);
+    void keyboard_handler_asm();
 }
 
-inline void outb(uint16_t port, uint8_t data) {
-    asm volatile ("outb %0, %1" : : "a"(data), "Nd"(port));
+static inline uint8_t inb(uint16_t port) {
+    uint8_t ret;
+    asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
 }
 
-inline void outw(uint16_t port, uint16_t data) {
-    asm volatile ("outw %0, %1" : : "a"(data), "Nd"(port));
+static inline void outb(uint16_t port, uint8_t val) {
+    asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
-// ---------------------------------------------------------------------------
-// Desligamento do Sistema (Múltiplos Métodos de Hardware)
-// ---------------------------------------------------------------------------
-void shutdown() {
-    // 1. Método QEMU (ACPI shutoff)
-    outw(0x604, 0x2000);
+// --- TERMINAL VGA ---
+volatile uint16_t* const VGA_BUFFER = (uint16_t*) 0xB8000;
+const int VGA_WIDTH = 80;
+const int VGA_HEIGHT = 25;
+int terminal_row = 0;
+int terminal_column = 0;
+uint8_t terminal_color = 0x0F; 
 
-    // 2. Método Bochs / Máquinas Virtuais Antigas
-    outw(0xB004, 0x2000);
-
-    // 3. Método VirtualBox / QEMU alternativo (ACPI PM1a_CNT)
-    outw(0x4004, 0x3400);
-
-    // 4. Reinício / Desligamento via Controlador de Teclado (PS/2)
-    outb(0x64, 0xFE);
-
-    // Se nenhum método fechar a VM, congela a CPU com segurança
-    asm volatile ("cli");
-    while (true) {
-        asm volatile ("hlt");
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Comparador de Strings Seguro
-// ---------------------------------------------------------------------------
-bool streql(const char* s1, const char* s2) {
-    int i = 0;
-    while (s1[i] != '\0' && s2[i] != '\0') {
-        if (s1[i] != s2[i]) return false;
-        i++;
-    }
-    return (s1[i] == '\0' && s2[i] == '\0');
-}
-
-// ---------------------------------------------------------------------------
-// Estruturas do Multiboot 1
-// ---------------------------------------------------------------------------
-struct MultibootInfo {
-    uint32_t flags;
-    uint32_t mem_lower;
-    uint32_t mem_upper;
-    uint32_t boot_device;
-    uint32_t cmdline;
-    uint32_t mods_count;
-    uint32_t mods_addr;
-    uint32_t syms[4];
-    uint32_t mmap_length;
-    uint32_t mmap_addr;
-    uint32_t drives_length;
-    uint32_t drives_addr;
-    uint32_t config_table;
-    uint32_t boot_loader_name;
-    uint32_t apm_table;
-    uint32_t vbe_control_info;
-    uint32_t vbe_mode_info;
-    uint16_t vbe_mode;
-    uint16_t vbe_interface_seg;
-    uint16_t vbe_interface_off;
-    uint16_t vbe_interface_len;
-    
-    // Framebuffer Info (Flags bit 12)
-    uint64_t framebuffer_addr;
-    uint32_t framebuffer_pitch;
-    uint32_t framebuffer_width;
-    uint32_t framebuffer_height;
-    uint8_t  framebuffer_bpp;
-    uint8_t  framebuffer_type;
-} __attribute__((packed));
-
-// ---------------------------------------------------------------------------
-// Fonte Bitmap 8x16 Básica (Caracteres Padrão)
-// ---------------------------------------------------------------------------
-static const uint8_t font8x16_basic[128][16] = {
-    // 0..31: Caracteres não imprimíveis
-    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0},
-    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0},
-    
-    // 32: Espaço ' '
-    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 33: '!'
-    {0x00,0x18,0x18,0x18,0x18,0x18,0x00,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 34..61
-    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0},
-    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0},
-    
-    // 62: '>'
-    {0x00,0x60,0x30,0x18,0x0C,0x18,0x30,0x60,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 63..64
-    {0}, {0},
-
-    // 65: 'A'
-    {0x00,0x18,0x3C,0x66,0x66,0x66,0x7E,0x66,0x66,0x66,0x66,0x00,0x00,0x00,0x00,0x00},
-    // 66: 'B'
-    {0x00,0x7C,0x66,0x66,0x7C,0x66,0x66,0x66,0x7C,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 67: 'C'
-    {0x00,0x3C,0x66,0x60,0x60,0x60,0x66,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 68: 'D'
-    {0x00,0x78,0x6C,0x66,0x66,0x66,0x6C,0x78,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 69: 'E'
-    {0x00,0x7E,0x60,0x60,0x7C,0x60,0x60,0x7E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 70: 'F'
-    {0x00,0x7E,0x60,0x60,0x7C,0x60,0x60,0x60,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 71: 'G'
-    {0x00,0x3C,0x66,0x60,0x6E,0x66,0x66,0x3E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 72: 'H'
-    {0x00,0x66,0x66,0x66,0x7E,0x66,0x66,0x66,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 73: 'I'
-    {0x00,0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 74..75
-    {0}, {0},
-    // 76: 'L'
-    {0x00,0x60,0x60,0x60,0x60,0x60,0x60,0x7E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 77
-    {0},
-    // 78: 'O'
-    {0x00,0x3C,0x66,0x66,0x66,0x66,0x66,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 79: 'P'
-    {0x00,0x7C,0x66,0x66,0x7C,0x60,0x60,0x60,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 80..81
-    {0}, {0},
-    // 82: 'R'
-    {0x00,0x7C,0x66,0x66,0x7C,0x6C,0x66,0x63,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 83: 'S'
-    {0x00,0x3C,0x66,0x30,0x1C,0x06,0x66,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 84: 'T'
-    {0x00,0x7E,0x18,0x18,0x18,0x18,0x18,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 85..96
-    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0},
-
-    // 97: 'a'
-    {0x00,0x00,0x00,0x3C,0x06,0x3E,0x66,0x3E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 98..99
-    {0}, {0},
-    // 100: 'd'
-    {0x00,0x06,0x06,0x3E,0x66,0x66,0x66,0x3E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 101: 'e'
-    {0x00,0x00,0x00,0x3C,0x66,0x7E,0x60,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 102..103
-    {0}, {0},
-    // 104: 'h'
-    {0x00,0x60,0x60,0x7C,0x66,0x66,0x66,0x66,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 105: 'i'
-    {0x00,0x18,0x00,0x38,0x18,0x18,0x18,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 106..110
-    {0}, {0}, {0}, {0}, {0},
-    // 111: 'o'
-    {0x00,0x00,0x00,0x3C,0x66,0x66,0x66,0x3C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 112..114
-    {0}, {0}, {0},
-    // 115: 's'
-    {0x00,0x00,0x00,0x3E,0x60,0x3C,0x06,0x7C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 116: 't'
-    {0x00,0x18,0x18,0x7E,0x18,0x18,0x18,0x0E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    // 117..127
-    {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}
-};
-
-// ---------------------------------------------------------------------------
-// Variáveis Globais de Vídeo
-// ---------------------------------------------------------------------------
-volatile uint32_t* fb_addr = (volatile uint32_t*)nullptr;
-uint32_t fb_width = 1024;
-uint32_t fb_height = 768;
-uint32_t fb_pitch = 1024 * 4;
-
-// ---------------------------------------------------------------------------
-// Desenhar Primitivas Gráficas
-// ---------------------------------------------------------------------------
-void draw_pixel(int x, int y, uint32_t color) {
-    if (x >= 0 && x < (int)fb_width && y >= 0 && y < (int)fb_height && fb_addr != nullptr) {
-        fb_addr[y * (fb_pitch / 4) + x] = color;
-    }
-}
-
-void draw_rect(int x, int y, int w, int h, uint32_t color) {
-    for (int i = y; i < y + h; ++i) {
-        for (int j = x; j < x + w; ++j) {
-            draw_pixel(j, i, color);
+void terminal_putc(char c) {
+    if (c == '\n') {
+        terminal_column = 0;
+        terminal_row++;
+    } else if (c == '\b') { 
+        if (terminal_column > 0) {
+            terminal_column--;
+            VGA_BUFFER[terminal_row * VGA_WIDTH + terminal_column] = (uint16_t)' ' | ((uint16_t)terminal_color << 8);
+        }
+    } else {
+        const int index = terminal_row * VGA_WIDTH + terminal_column;
+        VGA_BUFFER[index] = (uint16_t)c | ((uint16_t)terminal_color << 8);
+        terminal_column++;
+        if (terminal_column >= VGA_WIDTH) {
+            terminal_column = 0;
+            terminal_row++;
         }
     }
-}
 
-void draw_char(char c, int x, int y, uint32_t fg_color) {
-    uint8_t uc = (uint8_t)c;
-    if (uc >= 128) uc = ' ';
-    
-    const uint8_t* glyph = font8x16_basic[uc];
-    for (int cy = 0; cy < 16; ++cy) {
-        uint8_t row = glyph[cy];
-        for (int cx = 0; cx < 8; ++cx) {
-            if (row & (1 << (7 - cx))) {
-                draw_pixel(x + cx, y + cy, fg_color);
+    if (terminal_row >= VGA_HEIGHT) {
+        for (int y = 0; y < VGA_HEIGHT - 1; y++) {
+            for (int x = 0; x < VGA_WIDTH; x++) {
+                VGA_BUFFER[y * VGA_WIDTH + x] = VGA_BUFFER[(y + 1) * VGA_WIDTH + x];
             }
         }
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            VGA_BUFFER[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = (uint16_t)' ' | ((uint16_t)terminal_color << 8);
+        }
+        terminal_row = VGA_HEIGHT - 1;
     }
 }
 
-void draw_string(const char* str, int x, int y, uint32_t fg_color) {
-    int cur_x = x;
-    for (int i = 0; str[i] != '\0'; ++i) {
-        draw_char(str[i], cur_x, y, fg_color);
-        cur_x += 8;
+void terminal_print(const char* str) {
+    for (int i = 0; str[i] != '\0'; i++) {
+        terminal_putc(str[i]);
     }
 }
 
-void draw_window(int x, int y, int w, int h, const char* title, uint32_t bg_color, uint32_t title_color) {
-    draw_rect(x, y, w, h, bg_color);
-    draw_rect(x, y, w, 28, title_color);
-    draw_string(title, x + 10, y + 6, 0x00FFFFFF);
-    draw_rect(x + w - 22, y + 4, 18, 18, 0x00FF4444);
+// --- TABELA DE INTERRUPÇÕES (IDT) ---
+struct IDTEntry {
+    uint16_t base_low;
+    uint16_t selector;
+    uint8_t  zero;
+    uint8_t  flags;
+    uint16_t base_high;
+} __attribute__((packed));
+
+struct IDTPtr {
+    uint16_t limit;
+    uint32_t base;
+} __attribute__((packed));
+
+IDTEntry idt[256];
+IDTPtr idt_ptr;
+
+void set_idt_gate(int num, uint32_t base, uint16_t sel, uint8_t flags) {
+    idt[num].base_low = base & 0xFFFF;
+    idt[num].base_high = (base >> 16) & 0xFFFF;
+    idt[num].selector = sel;
+    idt[num].zero = 0;
+    idt[num].flags = flags;
 }
 
-// ---------------------------------------------------------------------------
-// Ponto de Entrada do Kernel
-// ---------------------------------------------------------------------------
-extern "C" void kernel_main(MultibootInfo* mb_info) {
-    // 1. Obter endereço do Framebuffer retornado pelo GRUB
-    if (mb_info != nullptr && (mb_info->flags & (1 << 12))) {
-        fb_addr = reinterpret_cast<volatile uint32_t*>(static_cast<uintptr_t>(mb_info->framebuffer_addr));
-        fb_width = mb_info->framebuffer_width;
-        fb_height = mb_info->framebuffer_height;
-        fb_pitch = mb_info->framebuffer_pitch;
-    } else {
-        fb_addr = reinterpret_cast<volatile uint32_t*>(0xFD000000);
+// --- DRIVER DE TECLADO PS/2 ---
+unsigned char kbd_layout[128] = {
+    0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
+  '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
+     0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',
+     0, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0,
+   '*',  0, ' '
+};
+
+extern "C" void keyboard_handler_main() {
+    uint8_t scancode = inb(0x60);
+    
+    if (!(scancode & 0x80)) {
+        char letter = kbd_layout[scancode];
+        if (letter != 0) {
+            terminal_putc(letter);
+        }
     }
+    outb(0x20, 0x20);
+}
 
-    // 2. Desenhar Área de Trabalho (Fundo Roxo Escuro)
-    draw_rect(0, 0, fb_width, fb_height, 0x00181825);
+void init_idt() {
+    idt_ptr.limit = (sizeof(IDTEntry) * 256) - 1;
+    idt_ptr.base  = (uint32_t)&idt;
 
-    // 3. Desenhar Barra de Tarefas Inferior
-    draw_rect(0, fb_height - 40, fb_width, 40, 0x0011111B);
-    draw_string("Sadistic OS", 15, fb_height - 26, 0x00A6ADC8);
+    outb(0x20, 0x11); outb(0xA0, 0x11);
+    outb(0x21, 0x20); outb(0xA1, 0x28);
+    outb(0x21, 0x04); outb(0xA1, 0x02);
+    outb(0x21, 0x01); outb(0xA1, 0x01);
+    outb(0x21, 0xFD); outb(0xA1, 0xFF); 
+    // Configura a interrupção 
+    set_idt_gate(33, (uint32_t)keyboard_handler_asm, 0x08, 0x8E);
 
-    // 4. Desenhar Janela Principal
-    draw_window(150, 120, 500, 320, "Sadistic Shadow OS - GUI", 0x00313244, 0x0089B4FA);
-    draw_string("Modo Grafico Ativo!", 180, 180, 0x00A6E3A1);
-    draw_string("Resolucao: 1024x768 32bpp", 180, 210, 0x00CDD6F4);
+    load_idt(&idt_ptr);
+}
 
-    // 5. Desenhar Ponteiro de Mouse Simples (Triângulo amarelo)
-    int mouse_x = 320;
-    int mouse_y = 240;
-    for (int i = 0; i < 12; ++i) {
-        draw_rect(mouse_x, mouse_y + i, 12 - i, 1, 0x00F9E2AF);
+// --- PONTO DE ENTRADA DO KERNEL ---
+extern "C" void kernel_main(void* multiboot_structure) {
+    for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+        VGA_BUFFER[i] = (uint16_t)' ' | ((uint16_t)terminal_color << 8);
     }
+    terminal_row = 0;
+    terminal_column = 0;
 
-    // Loop do Kernel
-    while (true) {
-        asm volatile ("hlt");
-    }
+    terminal_print("=========================================\n");
+    terminal_print("       SISTEMA OPERACIONAL EM C++        \n");
+    terminal_print("=========================================\n\n");
+    terminal_print("[OK] Inicializando IDT e Teclado...\n");
+
+    init_idt();
+
+    terminal_print("[OK] Teclado pronto! Digite algo abaixo:\n\n> ");
 }
