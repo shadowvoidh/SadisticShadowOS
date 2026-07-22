@@ -21,20 +21,20 @@ jobs:
 
     - name: Compilar o Kernel e Gerar a ISO
       run: |
-        # 1. Cria a estrutura completa de pastas
+        # 1. Cria a estrutura de pastas necessária
         mkdir -p build iso/boot/grub
 
-        # 2. Compila os arquivos de src/
+        # 2. Compila os arquivos fonte que estao em src/
         nasm -f elf32 src/boot.asm -o build/boot.o
         g++ -m32 -c src/kernel.cpp -o build/kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 
-        # 3. Linka usando o linker.ld
+        # 3. Linka apontando para o linker.ld na RAIZ
         ld -m elf_i386 -T linker.ld build/boot.o build/kernel.o -o build/myos.bin
 
-        # 4. Copia o binario para a estrutura da ISO
+        # 4. Copia o binario para a pasta da ISO
         cp build/myos.bin iso/boot/myos.bin
 
-        # 5. Gera o arquivo grub.cfg do zero dentro de iso/boot/grub/
+        # 5. Cria o arquivo grub.cfg dentro da pasta iso/boot/grub/
         cat << 'EOF' > iso/boot/grub/grub.cfg
         set timeout=0
         set default=0
@@ -45,7 +45,7 @@ jobs:
         }
         EOF
 
-        # 6. Gera a ISO
+        # 6. Gera a ISO final
         grub-mkrescue -o build/myos.iso iso
 
     - name: Disponibilizar a ISO para Download (Artifact)
