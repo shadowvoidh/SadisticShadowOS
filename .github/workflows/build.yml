@@ -53,3 +53,10 @@ jobs:
       with:
         name: myos-iso
         path: build/myos.iso
+
+
+
+    - name: Instalar Ferramentas
+      run: |
+        sudo apt update
+        sudo apt install -y nasm build-essential gcc-multilib g++-multilib xorriso grub-pc-bin
