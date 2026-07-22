@@ -46,7 +46,7 @@ extern "C" void kernel_main() {
         cursor++;
     }
 
-    // Pula para a próxima linha (linha 2 / coluna 0)
+    // Pula para a próxima linha
     cursor = 80;
 
     // 3. Exibe a mensagem de prompt
@@ -63,7 +63,7 @@ extern "C" void kernel_main() {
         if (inb(0x64) & 1) {
             unsigned char scancode = inb(0x60); // Lê o scancode da porta 0x60
             
-            // Verifica se a tecla foi PRESSIONADA (o bit 0x80 indica tecla solta)
+            // Verifica se a tecla foi PRESSIONADA (bit 0x80 = solta)
             if (!(scancode & 0x80)) {
                 char letter = kbd_us[scancode];
                 if (letter != 0) {
