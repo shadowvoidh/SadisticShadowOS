@@ -21,18 +21,20 @@ jobs:
 
     - name: Compilar o Kernel e Gerar a ISO
       run: |
-        # 1. Cria a pasta build
-        mkdir -p build
+        # 1. Cria TODAS as pastas necessárias (incluindo iso/boot/grub)
+        mkdir -p build iso/boot/grub
 
-        # 2. Compila os arquivos fonte de src/
+        # 2. Compila os fontes de src/
         nasm -f elf32 src/boot.asm -o build/boot.o
         g++ -m32 -c src/kernel.cpp -o build/kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 
         # 3. Linka usando o linker.ld da raiz
         ld -m elf_i386 -T linker.ld build/boot.o build/kernel.o -o build/SSos.bin
 
-        # 4. Prepara e gera a ISO
+        # 4. Copia o binário para a pasta iso/boot/
         cp build/SSos.bin iso/boot/SSos.bin
+
+        # 5. Gera a ISO
         grub-mkrescue -o build/SSos.iso iso
 
     - name: Disponibilizar a ISO para Download (Artifact)
