@@ -24,17 +24,17 @@ jobs:
         # 1. Cria a estrutura de pastas necessária
         mkdir -p build iso/boot/grub
 
-        # 2. Compila os arquivos fonte que estao em src/
+        # 2. Compila os arquivos de src/ salvando os .o dentro de build/
         nasm -f elf32 src/boot.asm -o build/boot.o
         g++ -m32 -c src/kernel.cpp -o build/kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 
-        # 3. Linka apontando para o linker.ld na RAIZ
+        # 3. Linka usando os arquivos que estao na pasta build/
         ld -m elf_i386 -T linker.ld build/boot.o build/kernel.o -o build/myos.bin
 
-        # 4. Copia o binario para a pasta da ISO
+        # 4. Copia o binario para a estrutura da ISO
         cp build/myos.bin iso/boot/myos.bin
 
-        # 5. Cria o arquivo grub.cfg dentro da pasta iso/boot/grub/
+        # 5. Cria o arquivo grub.cfg dentro de iso/boot/grub/
         cat << 'EOF' > iso/boot/grub/grub.cfg
         set timeout=0
         set default=0
