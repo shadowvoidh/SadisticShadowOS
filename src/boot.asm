@@ -13,3 +13,6 @@ _start:
     cli                        ; Desabilita interrupções de hardware
     call kernel_main           ; Chama o ponto de entrada 
     hlt                        ; Trava a CPU caso a função C++ retorne
+
+
+    section .note.GNU-stack noalloc noexec nowrite progbits

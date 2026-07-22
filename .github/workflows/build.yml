@@ -17,20 +17,27 @@ jobs:
     - name: Instalar Ferramentas
       run: |
         sudo apt update
-        sudo apt install -y nasm build-essential gcc-multilib g++-multilib xorriso grub-pc-bin
+        sudo apt install -y nasm build-essential gcc-multilib g++-multilib xorriso grub-pc-bin mtools
 
     - name: Compilar o Kernel e Gerar a ISO
       run: |
         mkdir -p build iso/boot/grub
+
+        # Compila os arquivos fonte
         nasm -f elf32 src/boot.asm -o build/boot.o
         g++ -m32 -c src/kernel.cpp -o build/kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+
+        # Linka os objetos
         ld -m elf_i386 -T linker.ld build/boot.o build/kernel.o -o build/myos.bin
+
+        # Prepara e gera a ISO
         cp build/myos.bin iso/boot/myos.bin
 
         cat << 'EOF' > iso/boot/grub/grub.cfg
         set timeout=0
         set default=0
-        menuentry "My OS" {
+
+        menuentry "Sadistic Shadow OS" {
             multiboot /boot/myos.bin
             boot
         }
@@ -43,8 +50,3 @@ jobs:
       with:
         name: myos-iso
         path: build/myos.iso
-
-    - name: Instalar Ferramentas
-      run: |
-        sudo apt update
-        sudo apt install -y nasm build-essential gcc-multilib g++-multilib xorriso grub-pc-bin
