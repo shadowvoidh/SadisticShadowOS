@@ -1,79 +1,73 @@
+// ---------------------------------------------------------------------------
+// Funções Úteis de Porta I/O (Assembly embutido)
+// ---------------------------------------------------------------------------
 
-extern "C" void kernel_main() {
-   
-    volatile char* vga_buffer = reinterpret_cast<volatile char*>(0xB8000);
-
-    const char* message = "Sadistic Shadow OS esta insano ativo !!!";
-    
-    
-    const char color_attribute = 0x0F;
-
-    
-    for (int i = 0; i < 80 * 25 * 2; i += 2) {
-        vga_buffer[i] = ' ';
-        vga_buffer[i + 1] = color_attribute;
-    }
-
-   
-    for (int i = 0; message[i] != '\0'; ++i) {
-        vga_buffer[i * 2]     = message[i];      
-        vga_buffer[i * 2 + 1] = color_attribute;  
-    }
-
-    
-    while (true) {
-        asm volatile("hlt");
-    }
-}
-
+// Lê um byte de uma porta I/O do hardware
 inline unsigned char inb(unsigned short port) {
     unsigned char result;
     asm volatile ("inb %1, %0" : "=a"(result) : "Nd"(port));
     return result;
 }
 
-// Escreve um byte em uma porta I/O
+// Escreve um byte em uma porta I/O do hardware
 inline void outb(unsigned short port, unsigned char data) {
     asm volatile ("outb %0, %1" : : "a"(data), "Nd"(port));
 }
 
-// Tabela simples de Scancodes do Teclado (Set 1) para caracteres ASCII
+// ---------------------------------------------------------------------------
+// Tabela de Scancodes do Teclado (Set 1) para ASCII
+// ---------------------------------------------------------------------------
 const char kbd_us[128] = {
-    0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
+    0,   27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
   '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
     0,  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',   0,
  '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',   0, '*',   0, ' '
 };
 
+// ---------------------------------------------------------------------------
+// Ponto de Entrada do Kernel
+// ---------------------------------------------------------------------------
 extern "C" void kernel_main() {
+    // Ponteiro para o buffer de memória VGA em modo texto (0xB8000)
     volatile char* vga_buffer = reinterpret_cast<volatile char*>(0xB8000);
     int cursor = 0;
 
-    // Limpa a tela
+    // 1. Limpa a tela inteira (80 colunas x 25 linhas)
     for (int i = 0; i < 80 * 25 * 2; i += 2) {
         vga_buffer[i] = ' ';
-        vga_buffer[i + 1] = 0x0F;
+        vga_buffer[i + 1] = 0x0F; // Texto branco em fundo preto
     }
 
-    // Mensagem inicial
-    const char* prompt = "Digite algo: ";
-    for (int i = 0; prompt[i] != '\0'; ++i) {
-        vga_buffer[cursor * 2] = prompt[i];
-        vga_buffer[cursor * 2 + 1] = 0x0A; // Verde
+    // 2. Exibe o título do sistema
+    const char* title = "Sadistic Shadow OS esta ativo !!!";
+    for (int i = 0; title[i] != '\0'; ++i) {
+        vga_buffer[cursor * 2]     = title[i];
+        vga_buffer[cursor * 2 + 1] = 0x0C; // Vermelho Claro
         cursor++;
     }
 
-    // Loop de leitura do teclado
+    // Pula para a próxima linha (linha 2 / coluna 0)
+    cursor = 80;
+
+    // 3. Exibe a mensagem de prompt
+    const char* prompt = "Digite algo: ";
+    for (int i = 0; prompt[i] != '\0'; ++i) {
+        vga_buffer[cursor * 2]     = prompt[i];
+        vga_buffer[cursor * 2 + 1] = 0x0A; // Verde Claro
+        cursor++;
+    }
+
+    // 4. Loop Infinito: Lê o teclado interativamente
     while (true) {
-        // Verifica se há dados na porta de status do teclado (0x64)
+        // Verifica se há dados na porta de status do controlador de teclado (0x64)
         if (inb(0x64) & 1) {
-            unsigned char scancode = inb(0x60); // Lê o caractere enviado
+            unsigned char scancode = inb(0x60); // Lê o scancode da porta 0x60
             
-            // Se o bit mais significativo não estiver setado, a tecla foi pressionada (não solta)
+            // Verifica se a tecla foi PRESSIONADA (o bit 0x80 indica tecla solta)
             if (!(scancode & 0x80)) {
                 char letter = kbd_us[scancode];
                 if (letter != 0) {
-                    vga_buffer[cursor * 2] = letter;
+                    vga_buffer[cursor * 2]     = letter;
                     vga_buffer[cursor * 2 + 1] = 0x0F; // Texto branco
                     cursor++;
                 }
