@@ -21,22 +21,22 @@ jobs:
 
     - name: Compilar o Kernel e Gerar a ISO
       run: |
-        # 1. Cria as pastas necessárias
-        mkdir -p build iso/boot/grub
+        # 1. Cria a pasta build
+        mkdir -p build
 
-        # 2. Compila os fontes de src/
+        # 2. Compila os arquivos fonte de src/
         nasm -f elf32 src/boot.asm -o build/boot.o
         g++ -m32 -c src/kernel.cpp -o build/kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 
-        # 3. Linka usando o linker.ld
-        ld -m elf_i386 -T linker.ld build/boot.o build/kernel.o -o build/myos.bin
+        # 3. Linka usando o linker.ld da raiz
+        ld -m elf_i386 -T linker.ld build/boot.o build/kernel.o -o build/SSos.bin
 
-        # 4. Prepara a ISO
-        cp build/myos.bin iso/boot/myos.bin
-        grub-mkrescue -o build/myos.iso iso
+        # 4. Prepara e gera a ISO
+        cp build/SSos.bin iso/boot/SSos.bin
+        grub-mkrescue -o build/SSos.iso iso
 
     - name: Disponibilizar a ISO para Download (Artifact)
       uses: actions/upload-artifact@v4
       with:
-        name: myos-iso
-        path: build/myos.iso
+        name: SSos-iso
+        path: build/SSos.iso
